@@ -99,6 +99,18 @@ img{max-width:100%;display:block;}
   min-width:160px;font-family:inherit;}
 .inline-text:disabled{background:#F0F1F5;color:#B4B9C6;}
 
+/* '다음' 클릭 후에만(form.validated) 미응답 문항을 붉게 표시 - 처음부터 전부 빨갛게 보이는 것을 방지 */
+form.validated .check-opt:has(input:invalid){border-color:var(--danger);background:#FDECEA;}
+form.validated .qblock:has(input:invalid) > .qtitle{color:var(--danger);}
+form.validated .item-card:has(.likert-options input:invalid){border-color:var(--danger);
+  box-shadow:0 0 0 3px rgba(192,57,43,.12);}
+/* :has() 미지원 브라우저(구형 인앱 브라우저 등)를 위한 대체 강조 - JS가 직접 이 클래스를 붙인다 */
+.item-card.field-missing,.qblock.field-missing{border-color:var(--danger);
+  box-shadow:0 0 0 3px rgba(192,57,43,.12);}
+.qblock.field-missing > .qtitle{color:var(--danger);}
+.pulse-highlight{animation:pulseHighlight 1.6s ease;}
+@keyframes pulseHighlight{0%,100%{box-shadow:none;}30%{box-shadow:0 0 0 5px rgba(192,57,43,.28);}}
+
 /* ---------- 역량 카드 & 리커트 척도 ---------- */
 .item-card{border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px;
   background:#FCFDFF;transition:box-shadow .15s ease;}
@@ -154,6 +166,9 @@ img{max-width:100%;display:block;}
 
 #configWarning{background:#FDECEA;border:1px solid #F5B7B1;color:var(--danger);border-radius:12px;
   padding:12px 16px;font-size:0.85rem;margin:14px 14px 0;display:none;}
+#stepAlert{background:#FDECEA;border:1px solid #F5B7B1;color:var(--danger);border-radius:12px;
+  padding:13px 16px;font-size:0.87rem;font-weight:700;margin:14px 14px 0;display:none;
+  position:sticky;top:64px;z-index:39;}
 #submitError{background:#FDECEA;border:1px solid #F5B7B1;color:var(--danger);border-radius:10px;
   padding:12px 16px;font-size:0.85rem;margin-top:14px;display:none;}
 
@@ -202,6 +217,7 @@ footer.uni{text-align:center;color:var(--muted);font-size:0.76rem;margin:26px 0 
 
 <div class="wrap">
 <div id="configWarning">⚠ 아직 응답 저장소(Google Apps Script) 주소가 설정되지 않았습니다. 배포 가이드를 참고하여 SCRIPT_URL을 설정해 주세요. 지금 제출하면 응답이 저장되지 않고 완료 화면만 표시됩니다.</div>
+<div id="stepAlert">⚠ 아직 응답하지 않은 필수 항목이 있습니다. 아래에서 붉게 표시된 문항을 확인해 주세요.</div>
 
 <form id="surveyForm">
 
@@ -2714,16 +2730,43 @@ footer.uni{text-align:center;color:var(--muted);font-size:0.76rem;margin:26px 0 
 
 <script>
 (function () {
+  // 초기화든 버튼 클릭이든, 어디서 오류가 나든 화면에 반드시 보이게 만든다.
+  // (버튼 클릭 이벤트 핸들러 안에서 발생하는 오류는 아래쪽 try/catch로는 잡히지 않으므로
+  //  각 핸들러 내부에서도 개별적으로 감싸고, 동일한 함수로 표시한다.)
+  function showRuntimeError(err, where) {
+    try {
+      console.error('설문 페이지 오류(' + where + '):', err);
+      var old = document.getElementById('runtimeErrorBox');
+      if (old) old.parentNode.removeChild(old);
+      var box = document.createElement('div');
+      box.id = 'runtimeErrorBox';
+      box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:999;' +
+        'background:#FDECEA;border:1px solid #F5B7B1;color:#C0392B;border-radius:12px;' +
+        'padding:14px 16px;font-size:0.85rem;font-family:sans-serif;box-shadow:0 8px 20px -8px rgba(0,0,0,.3);';
+      box.textContent = '오류가 발생했습니다(' + where + '): ' + (err && err.message ? err.message : err) +
+        ' — 이 화면을 캡처해서 보내주시면 원인을 바로 확인할 수 있습니다.';
+      document.body.appendChild(box);
+    } catch (e2) { /* 마지막 방어선: 여기서도 실패하면 더 이상 할 수 있는 게 없다 */ }
+  }
+
+  try {
   var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQzqwZV_VbZTTwjm9iCzNDFdJTZBPX0XFy-M-QHs63D7tCOZizbo4HrEc4LgDiYDIi/exec";
   var JOB_TO_SCHOOL = {"항공기 기계·동력장치 정비사": "항공기술·MRO스쿨", "항공전자 정비사": "항공기술·MRO스쿨", "항공기 복합재 수리원": "항공기술·MRO스쿨", "항공기 구조 엔지니어(Stress Engineer)": "항공기술·MRO스쿨", "항공전자 엔지니어(Avionics Systems Engineer)": "항공기술·MRO스쿨", "항공정비 엔지니어(Maintenance/Reliability)": "항공기술·MRO스쿨", "항공 비파괴 검사원(NDT/NDI)": "항공기술·MRO스쿨", "항공기 조종사(Airline Pilot)": "항공운항·교통관리스쿨", "운항분석·안전관리 전문가(SMS)": "항공운항·교통관리스쿨", "항공교통관제사(ATCO)": "항공운항·교통관리스쿨", "계류장 관제사/지상관제(Apron/Ground)": "항공운항·교통관리스쿨", "운항관리사/운항통제원(Dispatcher)": "항공운항·교통관리스쿨", "항공기 객실승무원(Cabin Crew)": "항공서비스·보안스쿨", "공항 여객서비스 지상직": "항공서비스·보안스쿨", "공항 보안검색요원": "항공서비스·보안스쿨", "항공화물 운송 전문가/포워더": "항공서비스·보안스쿨", "무인항공기 시스템 엔지니어(UAS)": "미래항공모빌리티스쿨", "eVTOL/AAM 기체설계 전문가": "미래항공모빌리티스쿨", "비행제어 알고리즘/자율비행 SW 엔지니어": "미래항공모빌리티스쿨", "저고도 교통관리/UTM·UAM 운항 통제": "미래항공모빌리티스쿨", "국방 무인기 운용 드론병": "미래항공모빌리티스쿨"};
   var SCHOOL_IMAGES = {"항공기술·MRO스쿨": "https://commons.wikimedia.org/wiki/Special:FilePath/U.S.%20Sailors%20perform%20maintenance%20on%20an%20MH-60R%20Seahawk%20helicopter%20assigned%20to%20Helicopter%20Maritime%20Strike%20Squadron%20%28HSM%29%2075%20in%20the%20hangar%20bay%20of%20the%20aircraft%20carrier%20USS%20Nimitz%20%28CVN%2068%29%20in%20the%20U.S.%205th%20Fleet%20area%20130817-N-JC752-244.jpg?width=1600", "항공운항·교통관리스쿨": "https://commons.wikimedia.org/wiki/Special:FilePath/Air%20Traffic%20Control%20Tower%2C%20Birmingham%20Airport.jpg?width=1600", "항공서비스·보안스쿨": "https://commons.wikimedia.org/wiki/Special:FilePath/Singapore%20Airlines%20Cabin%20Crew.png?width=1600", "미래항공모빌리티스쿨": "https://commons.wikimedia.org/wiki/Special:FilePath/Joby%20Aviation%20S4%20experimental%20eVTOL%20aircraft%20at%20Edwards%20AFB.jpg?width=1600"};
 
   var form = document.getElementById('surveyForm');
   var configWarning = document.getElementById('configWarning');
+  var stepAlert = document.getElementById('stepAlert');
   var submitError = document.getElementById('submitError');
 
-  if (!SCRIPT_URL || SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
+  if (configWarning && (!SCRIPT_URL || SCRIPT_URL.indexOf('PASTE_YOUR') === 0)) {
     configWarning.style.display = 'block';
+  }
+
+  // 사용자가 무언가 다시 입력/선택하면 이전에 떴던 경고 배너는 감춘다
+  if (form && stepAlert) {
+    form.addEventListener('input', function () { stepAlert.style.display = 'none'; });
+    form.addEventListener('change', function () { stepAlert.style.display = 'none'; });
   }
 
   // ---------------------------------------------------------------------
@@ -2843,75 +2886,174 @@ footer.uni{text-align:center;color:var(--muted);font-size:0.76rem;margin:26px 0 
       stepperWrap.style.display = 'none';
       navBar.style.display = 'none';
     }
-    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+    if (stepAlert) stepAlert.style.display = 'none';
+    form.classList.remove('validated');
+    document.querySelectorAll('.field-missing').forEach(function (el) { el.classList.remove('field-missing'); });
+    window.scrollTo(0, 0);
   }
 
-  document.getElementById('btnStart').addEventListener('click', function () { goToStep('partA'); });
+  var btnStart = document.getElementById('btnStart');
+  if (btnStart) btnStart.addEventListener('click', function () {
+    try { goToStep('partA'); } catch (err) { showRuntimeError(err, '설문 시작하기'); }
+  });
+
+  // -----------------------------------------------------------------------
+  // 자체 필수항목 검사 (네이티브 form.reportValidity()에 기대지 않는다)
+  // 일부 모바일 브라우저/인앱 브라우저(카카오톡 등)는 reportValidity()의
+  // 유효성 검사 말풍선을 화면에 그리지 않거나 동작이 불완전한 경우가 있어,
+  // "눌러도 아무 반응이 없는 것처럼 보이는" 문제를 만들 수 있다.
+  // 그래서 현재 화면(스텝)에 실제로 보이는 필수 입력만 직접 스캔해서 판단한다.
+  // -----------------------------------------------------------------------
+  function isEditableVisible(el) {
+    // display:none인 조상(예: 선택되지 않은 job-block)에 속한 요소는 검사 대상에서 제외
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  }
+
+  function getRequiredNamesInStep(stepEl) {
+    var seen = {};
+    var order = [];
+    var els = stepEl.querySelectorAll('[required]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.disabled) continue;
+      if (!el.name) continue;
+      if (!isEditableVisible(el)) continue; // 숨겨진 직무 블록 등은 제외
+      if (!seen[el.name]) { seen[el.name] = true; order.push(el.name); }
+    }
+    return order;
+  }
+
+  function isNameAnswered(stepEl, name) {
+    var els = stepEl.querySelectorAll('[name="' + name + '"]');
+    if (!els.length) return true;
+    var first = els[0];
+    if (first.type === 'radio' || first.type === 'checkbox') {
+      for (var i = 0; i < els.length; i++) { if (els[i].checked) return true; }
+      return false;
+    }
+    for (var j = 0; j < els.length; j++) {
+      if (els[j].disabled) continue;
+      if (els[j].value && ('' + els[j].value).trim() !== '') return true;
+    }
+    return false;
+  }
+
+  function markFieldMissing(stepEl, name) {
+    var wrap = stepEl.querySelectorAll('.item-card, .qblock');
+    for (var i = 0; i < wrap.length; i++) wrap[i].classList.remove('field-missing');
+    var els = stepEl.querySelectorAll('[name="' + name + '"]');
+    if (!els.length) return null;
+    var target = els[0].closest('.item-card') || els[0].closest('.qblock') || els[0];
+    target.classList.add('field-missing');
+    return target;
+  }
+
+  function scrollAndPulse(target) {
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.remove('pulse-highlight');
+    void target.offsetWidth; // 강제 리플로우 후 클래스를 다시 붙여야 애니메이션이 재생된다
+    target.classList.add('pulse-highlight');
+  }
 
   btnNext.addEventListener('click', function () {
-    submitError.style.display = 'none';
-    if (!form.reportValidity()) return; // 화면에 보이는(display:none이 아닌) 현재 스텝의 필수 항목만 검증됨
-    var idx = DATA_STEPS.indexOf(currentStepId);
-    if (idx === DATA_STEPS.length - 1) {
-      trySubmit();
-      return;
+    try {
+      submitError.style.display = 'none';
+      var stepEl = stepEls[currentStepId];
+      var requiredNames = stepEl ? getRequiredNamesInStep(stepEl) : [];
+      var missingName = null;
+      for (var i = 0; i < requiredNames.length; i++) {
+        if (!isNameAnswered(stepEl, requiredNames[i])) { missingName = requiredNames[i]; break; }
+      }
+
+      form.classList.add('validated'); // 보조 표시(:invalid 지원 브라우저에서 붉게 표시)
+
+      if (missingName) {
+        if (stepAlert) stepAlert.style.display = 'block';
+        var target = markFieldMissing(stepEl, missingName);
+        scrollAndPulse(target);
+        return;
+      }
+
+      if (stepAlert) stepAlert.style.display = 'none';
+      var idx = DATA_STEPS.indexOf(currentStepId);
+      if (idx === DATA_STEPS.length - 1) {
+        trySubmit();
+        return;
+      }
+      goToStep(DATA_STEPS[idx + 1]);
+    } catch (err) {
+      showRuntimeError(err, '다음 버튼');
     }
-    goToStep(DATA_STEPS[idx + 1]);
   });
 
   btnPrev.addEventListener('click', function () {
-    var idx = DATA_STEPS.indexOf(currentStepId);
-    goToStep(idx <= 0 ? 'cover' : DATA_STEPS[idx - 1]);
+    try {
+      var idx = DATA_STEPS.indexOf(currentStepId);
+      goToStep(idx <= 0 ? 'cover' : DATA_STEPS[idx - 1]);
+    } catch (err) {
+      showRuntimeError(err, '이전 버튼');
+    }
   });
 
   // ---------------------------------------------------------------------
   // 5) 제출
   // ---------------------------------------------------------------------
   function trySubmit() {
-    var phoneVal = '';
-    if (phone1 && phone2 && (phone1.value || phone2.value)) {
-      if (phone1.value.length !== 4 || phone2.value.length !== 4) {
-        submitError.textContent = '휴대전화 번호는 4자리-4자리 형식으로 입력해 주시거나, 비워두셔도 됩니다.';
-        submitError.style.display = 'block';
-        phone1.focus();
+    try {
+      var phoneVal = '';
+      if (phone1 && phone2 && (phone1.value || phone2.value)) {
+        if (phone1.value.length !== 4 || phone2.value.length !== 4) {
+          submitError.textContent = '휴대전화 번호는 4자리-4자리 형식으로 입력해 주시거나, 비워두셔도 됩니다.';
+          submitError.style.display = 'block';
+          phone1.focus();
+          return;
+        }
+        phoneVal = '010-' + phone1.value + '-' + phone2.value;
+      }
+
+      var fd = new FormData(form);
+      fd.set('phone', phoneVal);
+      fd.delete('phone1'); fd.delete('phone2');
+
+      ['교육수요_안전분야', '교육수요_교과목'].forEach(function (name) {
+        var vals = fd.getAll(name);
+        fd.delete(name);
+        fd.set(name, vals.join(', '));
+      });
+
+      var jobEl = form.querySelector('input[name="직종"]:checked');
+      var school = jobEl ? (JOB_TO_SCHOOL[jobEl.value] || '') : '';
+      fd.set('소속스쿨', school);
+
+      btnNext.disabled = true;
+      btnNext.textContent = '제출 중...';
+
+      if (!SCRIPT_URL || SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
+        goToStep('thanks');
         return;
       }
-      phoneVal = '010-' + phone1.value + '-' + phone2.value;
+
+      fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: fd })
+        .then(function () { goToStep('thanks'); })
+        .catch(function (err) {
+          btnNext.disabled = false;
+          btnNext.textContent = '제출하기';
+          submitError.textContent = '제출 중 오류가 발생했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요. (' + err + ')';
+          submitError.style.display = 'block';
+        });
+    } catch (err) {
+      btnNext.disabled = false;
+      btnNext.textContent = '제출하기';
+      showRuntimeError(err, '제출하기');
     }
-
-    var fd = new FormData(form);
-    fd.set('phone', phoneVal);
-    fd.delete('phone1'); fd.delete('phone2');
-
-    ['교육수요_안전분야', '교육수요_교과목'].forEach(function (name) {
-      var vals = fd.getAll(name);
-      fd.delete(name);
-      fd.set(name, vals.join(', '));
-    });
-
-    var jobEl = form.querySelector('input[name="직종"]:checked');
-    var school = jobEl ? (JOB_TO_SCHOOL[jobEl.value] || '') : '';
-    fd.set('소속스쿨', school);
-
-    btnNext.disabled = true;
-    btnNext.textContent = '제출 중...';
-
-    if (!SCRIPT_URL || SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
-      goToStep('thanks');
-      return;
-    }
-
-    fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: fd })
-      .then(function () { goToStep('thanks'); })
-      .catch(function (err) {
-        btnNext.disabled = false;
-        btnNext.textContent = '제출하기';
-        submitError.textContent = '제출 중 오류가 발생했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요. (' + err + ')';
-        submitError.style.display = 'block';
-      });
   }
 
   goToStep('cover');
+  } catch (setupErr) {
+    // 초기화 중 오류가 나면 다음 버튼이 먹통이 되므로, 콘솔과 화면에 모두 남겨 원인을 바로 알 수 있게 한다.
+    showRuntimeError(setupErr, '초기화');
+  }
 })();
 </script>
 </body>
