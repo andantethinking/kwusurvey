@@ -2,7 +2,6 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="refresh" content="0; url=https://script.google.com/macros/s/AKfycbzTQae8Ri3oOtgpkc3JvH9EhNQPZVAy-7-SGJ_db1iERcIFa1QncB6XfOnn9YmxeQg/exec?page=report">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>분석 결과 보고서로 이동 중...</title>
 <style>
@@ -19,7 +18,8 @@
   @keyframes spin{to{transform:rotate(360deg);}}
 </style>
 <script>
-  // 메타 리프레시가 차단되는 일부 환경을 대비한 JS 보조 리다이렉트
+  // meta refresh와 동시에 걸면 같은 exec 주소로 이중 요청이 발생해
+  // Apps Script 쪽에서 "현재 파일을 열 수 없습니다" 오류가 날 수 있어 JS 리다이렉트만 사용한다.
   window.location.replace("https://script.google.com/macros/s/AKfycbzTQae8Ri3oOtgpkc3JvH9EhNQPZVAy-7-SGJ_db1iERcIFa1QncB6XfOnn9YmxeQg/exec?page=report");
 </script>
 </head>
