@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>항공 핵심역량 Borich 분석 결과 보고서</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#101B33; --navy2:#1C2E52; --accent:#3F7CE0; --accent2:#7AA6F2;
+  --gold:#D8A857; --bg:#F3F5FA; --card:#FFFFFF; --border:#E6E9F2; --text:#1B2436;
+  --muted:#68728A; --danger:#C0392B; --ok:#1E8E5A;
+  --hh:#C0392B; --hl:#D8A857; --lh:#3F7CE0; --ll:#8B93A6;
+  --shadow:0 10px 30px -12px rgba(16,27,51,.18);
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px 60px;}
+
+/* ---- 접속 게이트 ---- */
+.gate{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background-size:cover;background-position:center;color:#fff;padding:24px;}
+.gate::before{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(10,16,32,.55) 0%,rgba(9,14,28,.92) 100%);}
+.gate-box{position:relative;z-index:1;max-width:420px;width:100%;background:rgba(16,27,51,.55);
+  border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:32px 28px;backdrop-filter:blur(10px);}
+.gate-box h1{font-size:1.25rem;margin:0 0 8px;font-weight:800;}
+.gate-box p{font-size:0.86rem;color:#CBD5EA;margin:0 0 20px;}
+.gate-box input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.3);
+  background:rgba(255,255,255,.08);color:#fff;font-size:1rem;margin-bottom:12px;}
+.gate-box input::placeholder{color:#93A0BE;}
+.gate-box button{width:100%;padding:14px;border:none;border-radius:12px;background:var(--gold);
+  color:#241A05;font-weight:800;font-size:1rem;cursor:pointer;}
+.gate-box button:disabled{opacity:.6;cursor:not-allowed;}
+.gate-error{color:#FFC9BE;font-size:0.83rem;margin-top:10px;display:none;}
+
+/* ---- 리포트 헤더 ---- */
+header.rpt{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:28px 16px 22px;}
+header.rpt .inner{max-width:980px;margin:0 auto;}
+header.rpt h1{margin:0 0 6px;font-size:1.3rem;font-weight:800;}
+header.rpt p{margin:0;font-size:0.85rem;color:#CBD5EA;}
+.summary-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px;}
+.summary-card{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);border-radius:14px;
+  padding:12px 18px;min-width:130px;}
+.summary-card .num{font-size:1.35rem;font-weight:800;}
+.summary-card .lab{font-size:0.76rem;color:#B9C6E8;}
+.btn-refresh{margin-top:16px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);
+  color:#fff;padding:9px 16px;border-radius:10px;font-size:0.83rem;cursor:pointer;}
+.btn-refresh:hover{background:rgba(255,255,255,.2);}
+
+/* ---- 섹션 공통 ---- */
+.section{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:22px 20px;margin-top:20px;}
+.section h2{margin:0 0 4px;font-size:1.08rem;color:var(--navy2);}
+.section .desc{font-size:0.84rem;color:var(--muted);margin:0 0 16px;}
+.chart-wrap{position:relative;height:360px;margin-bottom:18px;}
+select#jobSelect{padding:10px 14px;border-radius:10px;border:1px solid var(--border);font-size:0.9rem;
+  margin-bottom:16px;background:#fff;min-width:260px;}
+
+table.rpt{width:100%;border-collapse:collapse;font-size:0.83rem;}
+table.rpt th{background:#EEF3FD;color:var(--navy2);text-align:left;padding:9px 10px;font-weight:700;
+  white-space:nowrap;}
+table.rpt td{padding:8px 10px;border-bottom:1px solid var(--border);}
+table.rpt tr:hover td{background:#F7F9FD;}
+table.rpt td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:0.72rem;font-weight:800;color:#fff;}
+.badge.HH{background:var(--hh);} .badge.HL{background:var(--hl);color:#241A05;}
+.badge.LH{background:var(--hl);color:#241A05;}
+.badge.LL{background:var(--ll);}
+.rank1{font-weight:800;color:var(--danger);}
+.empty-note{background:#FFF6E5;border:1px solid #F1D9A0;color:#8A6416;border-radius:12px;
+  padding:14px 16px;font-size:0.85rem;}
+.legend-quad{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:0.78rem;color:var(--muted);margin-bottom:14px;}
+.legend-quad span{display:inline-flex;align-items:center;gap:5px;}
+.legend-quad i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+.loading{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.88rem;padding:30px 0;}
+.spinner{width:18px;height:18px;border:3px solid #DCE1EE;border-top-color:var(--accent);border-radius:50%;
+  animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+footer.uni{text-align:center;color:var(--muted);font-size:0.76rem;margin:26px 0 0;}
+@media (max-width:640px){.chart-wrap{height:300px;}}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate" style="background-image:url('https://commons.wikimedia.org/wiki/Special:FilePath/Aircraft%20approaching%20runway.jpg?width=1920')">
+  <div class="gate-box">
+    <h1>항공 핵심역량 Borich 분석 결과 보고서</h1>
+    <p>경운대학교 항공종합교육원 설립 기초연구 · 접속 코드를 입력하시면 실시간 분석 결과를 볼 수 있습니다.</p>
+    <input type="password" id="codeInput" placeholder="접속 코드 입력" autocomplete="off">
+    <button type="button" id="btnEnter">보고서 열기</button>
+    <p class="gate-error" id="gateError">접속 코드가 올바르지 않습니다. 다시 확인해 주세요.</p>
+  </div>
+</div>
+
+<div id="reportRoot" style="display:none">
+  <header class="rpt">
+    <div class="inner">
+      <h1>항공 핵심역량 및 스쿨별 직무역량 교육요구도 — Borich 분석 결과</h1>
+      <p>설문 응답이 들어올 때마다 이 페이지를 열 때 자동으로 최신 데이터를 다시 계산합니다. (구글시트 'Borich분석' 탭도 함께 갱신됩니다.)</p>
+      <div class="summary-row">
+        <div class="summary-card"><div class="num" id="sumN">-</div><div class="lab">전체 응답 수</div></div>
+        <div class="summary-card"><div class="num" id="sumTime">-</div><div class="lab">최근 계산 시각</div></div>
+      </div>
+      <button type="button" class="btn-refresh" id="btnRefresh">↻ 새로고침</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="section" id="coreSection">
+      <h2>Ⅰ. 핵심역량 20개 — 전체 응답자 기준 Borich 요구도(WDS)</h2>
+      <p class="desc">필요수준과 현재수준의 격차(Gap)와 필요수준 평균을 함께 반영한 Borich 요구도(WDS) 순으로 정렬했습니다. WDS가 높을수록 교육 우선순위가 높습니다.</p>
+      <div class="legend-quad">
+        <span><i style="background:var(--hh)"></i>HH — 필요수준·격차 모두 평균 이상 (최우선)</span>
+        <span><i style="background:var(--hl)"></i>HL/LH — 하나만 평균 이상 (중기 검토)</span>
+        <span><i style="background:var(--ll)"></i>LL — 둘 다 평균 이하 (후순위)</span>
+      </div>
+      <div class="chart-wrap"><canvas id="coreChart"></canvas></div>
+      <div id="coreTableWrap"></div>
+    </div>
+
+    <div class="section" id="jobSection">
+      <h2>Ⅱ. 스쿨별 세부 직무역량 — 직무별 Borich 요구도(WDS)</h2>
+      <p class="desc">1번 문항에서 해당 직무를 선택한 응답자만을 대상으로 계산됩니다. 직무를 선택해 주세요.</p>
+      <select id="jobSelect"></select>
+      <div class="chart-wrap"><canvas id="jobChart"></canvas></div>
+      <div id="jobTableWrap"></div>
+    </div>
+  </div>
+  <footer class="uni">경운대학교 항공종합교육원 설립 기초연구 · 한국교육공학연구소</footer>
+</div>
+
+<script>
+(function () {
+  var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQzqwZV_VbZTTwjm9iCzNDFdJTZBPX0XFy-M-QHs63D7tCOZizbo4HrEc4LgDiYDIi/exec";
+  var CORE_NAMES = ["문제해결 및 분석 역량", "상황인식 역량", "의사결정·상황관리 역량", "위험·오류(TEM) 관리 역량", "안전지향성·안전문화 역량", "규정준수·표준화 역량", "품질·무결점 지향 역량", "인적요인·피로·스트레스 관리 역량", "리더십 및 작업·업무관리 역량", "책임의식·성실·윤리 역량", "전문성 개발·지속학습 역량", "서비스 및 고객지향 역량", "고객경험(CX) 관리 역량", "대내·대외 커뮤니케이션 역량", "항공영어·외국어 소통 역량", "팀워크·협업·조정 역량", "다문화·글로벌 역량", "디지털 리터러시 및 시스템 활용 역량", "데이터 분석·의사결정 역량", "도전정신·변화 수용 역량"];
+  var JOB_LIST = [["항공기 기계·동력장치 정비사", "항공기술·MRO스쿨"], ["항공전자 정비사", "항공기술·MRO스쿨"], ["항공기 복합재 수리원", "항공기술·MRO스쿨"], ["항공기 구조 엔지니어(Stress Engineer)", "항공기술·MRO스쿨"], ["항공전자 엔지니어(Avionics Systems Engineer)", "항공기술·MRO스쿨"], ["항공정비 엔지니어(Maintenance/Reliability)", "항공기술·MRO스쿨"], ["항공 비파괴 검사원(NDT/NDI)", "항공기술·MRO스쿨"], ["항공기 조종사(Airline Pilot)", "항공운항·교통관리스쿨"], ["운항분석·안전관리 전문가(SMS)", "항공운항·교통관리스쿨"], ["항공교통관제사(ATCO)", "항공운항·교통관리스쿨"], ["계류장 관제사/지상관제(Apron/Ground)", "항공운항·교통관리스쿨"], ["운항관리사/운항통제원(Dispatcher)", "항공운항·교통관리스쿨"], ["항공기 객실승무원(Cabin Crew)", "항공서비스·보안스쿨"], ["공항 여객서비스 지상직", "항공서비스·보안스쿨"], ["공항 보안검색요원", "항공서비스·보안스쿨"], ["항공화물 운송 전문가/포워더", "항공서비스·보안스쿨"], ["무인항공기 시스템 엔지니어(UAS)", "미래항공모빌리티스쿨"], ["eVTOL/AAM 기체설계 전문가", "미래항공모빌리티스쿨"], ["비행제어 알고리즘/자율비행 SW 엔지니어", "미래항공모빌리티스쿨"], ["저고도 교통관리/UTM·UAM 운항 통제", "미래항공모빌리티스쿨"], ["국방 무인기 운용 드론병", "미래항공모빌리티스쿨"]];          // [[jobName, school], ...]
+  var JOB_ITEM_COUNT = {"항공기 기계·동력장치 정비사": 6, "항공전자 정비사": 5, "항공기 복합재 수리원": 6, "항공기 구조 엔지니어(Stress Engineer)": 5, "항공전자 엔지니어(Avionics Systems Engineer)": 5, "항공정비 엔지니어(Maintenance/Reliability)": 5, "항공 비파괴 검사원(NDT/NDI)": 6, "항공기 조종사(Airline Pilot)": 8, "운항분석·안전관리 전문가(SMS)": 5, "항공교통관제사(ATCO)": 5, "계류장 관제사/지상관제(Apron/Ground)": 5, "운항관리사/운항통제원(Dispatcher)": 5, "항공기 객실승무원(Cabin Crew)": 5, "공항 여객서비스 지상직": 5, "공항 보안검색요원": 5, "항공화물 운송 전문가/포워더": 5, "무인항공기 시스템 엔지니어(UAS)": 5, "eVTOL/AAM 기체설계 전문가": 5, "비행제어 알고리즘/자율비행 SW 엔지니어": 5, "저고도 교통관리/UTM·UAM 운항 통제": 5, "국방 무인기 운용 드론병": 5};
+
+  var gate = document.getElementById('gate');
+  var reportRoot = document.getElementById('reportRoot');
+  var codeInput = document.getElementById('codeInput');
+  var btnEnter = document.getElementById('btnEnter');
+  var gateError = document.getElementById('gateError');
+  var btnRefresh = document.getElementById('btnRefresh');
+
+  var STORAGE_KEY = 'borichReportCode';
+  var coreChartInstance = null, jobChartInstance = null;
+  var lastAnalysis = null;
+
+  function quadLabel(q) {
+    return q === 'HH' ? 'HH(최우선)' : q === 'HL' ? 'HL' : q === 'LH' ? 'LH' : q === 'LL' ? 'LL(후순위)' : '-';
+  }
+
+  function fmtNum(v) { return (v === null || v === undefined) ? '-' : Number(v).toFixed(2); }
+
+  function jsonp(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var cbName = 'cb_' + Math.random().toString(36).slice(2);
+      var script = document.createElement('script');
+      var done = false;
+      var timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(new Error('요청이 시간 초과되었습니다. 배포 상태(웹 앱 접근 권한/재배포 여부)를 확인해 주세요.'));
+      }, timeoutMs || 15000);
+
+      function cleanup() {
+        clearTimeout(timer);
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+      }
+
+      window[cbName] = function (data) {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(data);
+      };
+      script.onerror = function () {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(new Error('스크립트 로드에 실패했습니다. 인터넷 연결 또는 배포 URL을 확인해 주세요.'));
+      };
+      script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'callback=' + cbName;
+      document.body.appendChild(script);
+    });
+  }
+
+  function renderTable(containerEl, rows, opts) {
+    var html = '<table class="rpt"><thead><tr>' + opts.headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var rankCell = r.rank ? ('<td class="num' + (r.rank === 1 ? ' rank1' : '') + '">' + r.rank + '</td>') : '<td class="num">-</td>';
+      html += '<tr>' + opts.rowHtml(r, rankCell) + '</tr>';
+    });
+    html += '</tbody></table>';
+    if (!rows.length) html = '<div class="empty-note">아직 표시할 응답이 없습니다. 설문 응답이 들어오면 자동으로 채워집니다.</div>';
+    containerEl.innerHTML = html;
+  }
+
+  function scatterDataset(items, xKey, yKey, labelKey) {
+    return items.filter(function (it) { return it.n > 0; }).map(function (it) {
+      return { x: it[xKey], y: it[yKey], label: it[labelKey], quadrant: it.quadrant, wds: it.wds };
+    });
+  }
+
+  var QUAD_COLOR = { HH: '#C0392B', HL: '#D8A857', LH: '#3F7CE0', LL: '#8B93A6' };
+
+  function drawScatter(canvasId, items, xLabel, yLabel, existing) {
+    var ctx = document.getElementById(canvasId).getContext('2d');
+    var points = scatterDataset(items, 'meanNeed', 'gap', 'label');
+    if (existing) existing.destroy();
+    return new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: '역량 항목',
+          data: points,
+          backgroundColor: points.map(function (p) { return QUAD_COLOR[p.quadrant] || '#8B93A6'; }),
+          pointRadius: 6, pointHoverRadius: 8
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { title: { display: true, text: xLabel } },
+          y: { title: { display: true, text: yLabel } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                var p = ctx.raw;
+                return p.label + ' (WDS ' + fmtNum(p.wds) + ', ' + quadLabel(p.quadrant) + ')';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function renderCore(analysis) {
+    var items = analysis.core.map(function (it) {
+      return Object.assign({}, it, { label: CORE_NAMES[it.idx - 1] || it.code });
+    });
+    var sorted = items.slice().sort(function (a, b) {
+      if (a.rank === null) return 1; if (b.rank === null) return -1; return a.rank - b.rank;
+    });
+    coreChartInstance = drawScatter('coreChart', items, '필요수준 평균 (중요도)', '격차 (필요-현재)', coreChartInstance);
+    renderTable(document.getElementById('coreTableWrap'), sorted, {
+      headers: ['우선순위', '핵심역량', 'N', '필요수준', '현재수준', '격차', 'WDS', 'Locus'],
+      rowHtml: function (r, rankCell) {
+        return rankCell +
+          '<td>' + r.label + '</td>' +
+          '<td class="num">' + r.n + '</td>' +
+          '<td class="num">' + fmtNum(r.meanNeed) + '</td>' +
+          '<td class="num">' + fmtNum(r.meanHave) + '</td>' +
+          '<td class="num">' + fmtNum(r.gap) + '</td>' +
+          '<td class="num">' + fmtNum(r.wds) + '</td>' +
+          '<td>' + (r.quadrant ? '<span class="badge ' + r.quadrant + '">' + r.quadrant + '</span>' : '-') + '</td>';
+      }
+    });
+  }
+
+  function renderJob(analysis, jobName) {
+    var jobResult = analysis.jobs[jobName];
+    var jobTableWrap = document.getElementById('jobTableWrap');
+    if (!jobResult) {
+      renderTable(jobTableWrap, [], { headers: [], rowHtml: function () { return ''; } });
+      return;
+    }
+    var items = jobResult.items.map(function (it) { return Object.assign({}, it, { label: it.code }); });
+    var sorted = items.slice().sort(function (a, b) {
+      if (a.rank === null) return 1; if (b.rank === null) return -1; return a.rank - b.rank;
+    });
+    jobChartInstance = drawScatter('jobChart', items, '필요수준 평균 (중요도)', '격차 (필요-현재)', jobChartInstance);
+    renderTable(jobTableWrap, sorted, {
+      headers: ['우선순위', '코드', 'N', '필요수준', '현재수준', '격차', 'WDS', 'Locus'],
+      rowHtml: function (r, rankCell) {
+        return rankCell +
+          '<td>' + r.code + '</td>' +
+          '<td class="num">' + r.n + '</td>' +
+          '<td class="num">' + fmtNum(r.meanNeed) + '</td>' +
+          '<td class="num">' + fmtNum(r.meanHave) + '</td>' +
+          '<td class="num">' + fmtNum(r.gap) + '</td>' +
+          '<td class="num">' + fmtNum(r.wds) + '</td>' +
+          '<td>' + (r.quadrant ? '<span class="badge ' + r.quadrant + '">' + r.quadrant + '</span>' : '-') + '</td>';
+      }
+    });
+    var titleP = document.querySelector('#jobSection .desc');
+    if (titleP) titleP.textContent = '응답 수(N): ' + jobResult.n + '명 — 1번 문항에서 해당 직무를 선택한 응답자만을 대상으로 계산됩니다.';
+  }
+
+  function populateJobSelect() {
+    var sel = document.getElementById('jobSelect');
+    sel.innerHTML = JOB_LIST.map(function (pair) {
+      return '<option value="' + pair[0].replace(/"/g, '&quot;') + '">' + pair[1] + ' · ' + pair[0] + '</option>';
+    }).join('');
+    sel.addEventListener('change', function () {
+      if (lastAnalysis) renderJob(lastAnalysis, sel.value);
+    });
+  }
+
+  function renderAll(analysis) {
+    lastAnalysis = analysis;
+    document.getElementById('sumN').textContent = analysis.totalResponses;
+    document.getElementById('sumTime').textContent = new Date(analysis.generatedAt).toLocaleString('ko-KR');
+    renderCore(analysis);
+    var sel = document.getElementById('jobSelect');
+    if (!sel.options.length) populateJobSelect();
+    renderJob(analysis, sel.value || (JOB_LIST[0] && JOB_LIST[0][0]));
+  }
+
+  function loadReport(code) {
+    var url = SCRIPT_URL + '?action=report&code=' + encodeURIComponent(code);
+    reportRoot.style.display = 'block';
+    gate.style.display = 'none';
+    document.getElementById('coreTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>최신 응답을 불러와 분석 중입니다...</div>';
+    jsonp(url).then(function (payload) {
+      if (!payload || payload.result !== 'success') {
+        gate.style.display = 'flex';
+        reportRoot.style.display = 'none';
+        gateError.textContent = (payload && payload.message) ? payload.message : '접속 코드가 올바르지 않습니다. 다시 확인해 주세요.';
+        gateError.style.display = 'block';
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        return;
+      }
+      try { localStorage.setItem(STORAGE_KEY, code); } catch (e) {}
+      renderAll(payload.data);
+    }).catch(function (err) {
+      document.getElementById('coreTableWrap').innerHTML =
+        '<div class="empty-note">불러오기에 실패했습니다: ' + err.message + '</div>';
+    });
+  }
+
+  btnEnter.addEventListener('click', function () {
+    gateError.style.display = 'none';
+    var code = (codeInput.value || '').trim();
+    if (!code) return;
+    loadReport(code);
+  });
+  codeInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') btnEnter.click(); });
+  btnRefresh.addEventListener('click', function () {
+    var code = (function () { try { return localStorage.getItem(STORAGE_KEY); } catch (e) { return null; } })();
+    if (code) loadReport(code);
+  });
+
+  (function tryAutoLogin() {
+    var saved = null;
+    try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    if (saved) loadReport(saved);
+  })();
+})();
+</script>
+</body>
+</html>
